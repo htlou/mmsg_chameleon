@@ -3,3 +3,11 @@
 dist/
 mmsg/_version.py
 mmsg.egg-info
+image*
+*.json
+output*
+*anole.py
+batch_generation.py
+*eval.sh
+*1e-4.sh
+*eval#2.sh

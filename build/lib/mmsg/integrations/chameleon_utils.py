@@ -1,14 +1,11 @@
 import os
-import sys
 import uuid
 from typing import TYPE_CHECKING, List, Literal, Optional, Tuple, TypedDict, Union
 
 import torch
 from typing_extensions import NotRequired
 
-sys.path.append(os.path.join(os.path.dirname(__file__), '..'))
-
-from utils import pil_to_base64
+from ..utils import pil_to_base64
 
 if TYPE_CHECKING:
     import numpy as np
@@ -18,8 +15,7 @@ if TYPE_CHECKING:
         ChameleonProcessor,
     )
 
-import logging
-logger = logging.getLogger()
+
 class ImageDataDict(TypedDict):
     base64_str: str
     save_path: NotRequired[str]
@@ -99,23 +95,15 @@ def build_response_from_segments(
     text_str_list = processor.batch_decode(text_tokens_list, skip_special_tokens=True)
 
     image_tokens_tensor = torch.tensor(image_tokens_list, device=model.device)
-    
-    logger.info(f"Image token tensor has shape: {image_tokens_tensor.shape}")
-
-    try:
-        pixel_values = model.decode_image_tokens(image_tokens_tensor)
-        images = processor.postprocess_pixel_values(
-            pixel_values.float().detach().cpu().numpy()
-        )
-    except:
-        images = None
+    pixel_values = model.decode_image_tokens(image_tokens_tensor)
+    images = processor.postprocess_pixel_values(
+        pixel_values.float().detach().cpu().numpy()
+    )
 
     response: ResponseDict = {"text": "", "images": []}
-    concise_response = {"text": "", "images": []}
     for modality, _ in segments:
         if modality == "text":
             response["text"] += text_str_list.pop(0)
-            concise_response["text"] = response["text"]
         else:
             response["text"] += "<image>"
             image = images.pop(0)
@@ -132,9 +120,7 @@ def build_response_from_segments(
                 image_data["save_path"] = image_save_path
 
             response["images"].append(image_data)
-            concise_image_data = {"save_path": image_data["save_path"]}
-            concise_response["images"].append(concise_image_data)
-    return response, concise_response
+    return response
 
 
 def postprocess_token_sequence(

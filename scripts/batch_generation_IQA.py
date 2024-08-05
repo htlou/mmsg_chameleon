@@ -2,9 +2,13 @@ import argparse
 import json
 import logging
 import os
+from re import I
+import sys
 from typing import Literal, Optional
 from PIL import Image
-import torch
+from tqdm import tqdm
+
+sys.path.append(os.path.join(os.path.dirname(__file__), '..', 'mmsg', 'integrations'))
 
 logging.basicConfig(
     format="%(asctime)s %(levelname)-8s %(message)s",
@@ -15,7 +19,7 @@ logger = logging.getLogger()
 
 # TODO: currently need to pip install git+https://github.com/leloykun/transformers.git@fc--anole before using this script
 def run_interleaved_generation(
-    model_id: str = "/aifs4su/yaodong/projects/hantao/dev_cham/align-anything/outputs/sft_chameleon_0727_0803_v2",
+    model_id: str = "/aifs4su/yaodong/models/Anole-7b-v0.1-hf",
     inference_mode: Literal["text-to-interleaved-text-image"] = "text-to-interleaved-text-image",
     prompt: Optional[str] = None,
     max_new_tokens: int = 2400,
@@ -23,7 +27,8 @@ def run_interleaved_generation(
     model_cache_dir: Optional[str] = None,
     outputs_dir: str = ".",
     seed: Optional[int] = None,
-    image_path: Optional[str] = None,
+    input_file: str = None,
+    output_file: str = None,
 ) -> str:
     import torch
     from term_image.image import from_file
@@ -35,7 +40,7 @@ def run_interleaved_generation(
     # from chameleon.modeling_chameleon import ChameleonForConditionalGeneration
     # from chameleon.processing_chameleon import ChameleonProcessor
 
-    from mmsg.integrations.chameleon_utils import postprocess_token_sequence
+    from chameleon_utils import postprocess_token_sequence
 
     if seed is not None:
         set_seed(seed)
@@ -64,60 +69,77 @@ def run_interleaved_generation(
         cache_dir=model_cache_dir,
     )
 
-    if inference_mode == "text-to-interleaved-text-image":
-        logger.info("TASK: Text to Interleaved Text-Image generation")
-        if prompt is None:
-            prompt = "Please draw an apple!"
-        
+    # if inference_mode == "text-to-interleaved-text-image":
+    #     logger.info("TASK: Text to Interleaved Text-Image generation")
+    #     if prompt is None:
+    #         prompt = "Please draw an apple!"
+    #     logger.info(f"Prompt: {prompt}")
 
-        image = Image.open(image_path)
-        prompt = f"USER: {prompt} <image> ASSISTANT: "
+    #     inputs = processor(prompt, return_tensors="pt").to(
+    #         model.device, dtype=model.dtype
+    #     )
+    # else:
+    #     raise ValueError(f"Invalid inference_id: {inference_mode}")
+
+    with open(input_file, "r") as f:
+        inputs = json.load(f)
+    
+    outputs = []
+    concise_outputs = []
+    for piece in tqdm(inputs, desc="Generating responses"):
+        # prompt = "Generate an image according to the following instruction: {}".format(piece['prompt'])
+        prompt = f"USER: {piece['question']} <image> ASSISTANT: "
         logger.info(f"Prompt: {prompt}")
-        
-        inputs = processor(prompt, image,  return_tensors="pt").to(
+        image = Image.open(piece['image_url'])
+        inputs = processor(prompt, image, return_tensors="pt").to(
             model.device, dtype=model.dtype
         )
-    else:
-        raise ValueError(f"Invalid inference_id: {inference_mode}")
+        logger.info("Generating response...")
+        with torch.inference_mode():
+            output_token_ids_batch = model.generate(
+                **inputs,
+                multimodal_generation_mode="interleaved-text-image",
+                max_new_tokens=max_new_tokens,
+                do_sample=True,
+            )
+        logger.info("Finished generation.")
+        # logger.info(output_token_ids_batch)
 
-    logger.info("Generating response...")
-    with torch.inference_mode():
-        output_token_ids_batch = model.generate(
-            **inputs,
-            multimodal_generation_mode="interleaved-text-image",
-            max_new_tokens=max_new_tokens,
-            do_sample=True,
+        output_token_ids_batch = output_token_ids_batch.to(dtype=inputs["input_ids"].dtype).detach().cpu().numpy()
+
+        response_token_ids = output_token_ids_batch[0][len(inputs["input_ids"][0]) :]
+
+        full_outputs_dir = os.path.abspath(outputs_dir)
+        if not os.path.exists(full_outputs_dir):
+            logging.info(f"Creating directory: {full_outputs_dir}")
+            os.mkdir(full_outputs_dir)
+
+        response, concise_response = postprocess_token_sequence(
+            response_token_ids, model, processor, full_outputs_dir, validate=True
         )
-    logger.info("Finished generation.")
-    torch.set_printoptions(threshold=torch.inf)
-    logger.info(output_token_ids_batch)
+        response['prompt'] = prompt
+        concise_response['prompt'] = prompt
 
-    output_token_ids_batch = output_token_ids_batch.to(dtype=inputs["input_ids"].dtype).detach().cpu().numpy()
+        logger.info(f"Response: {response['text']}")
+        for image in response["images"]:
+            if "save_path" not in image:
+                continue
+            logger.info(f"{image['save_path'] = }")
+            # terminal_image = from_file(image["save_path"])
+            # terminal_image.draw()
+        
+        outputs.append(response)
+        concise_outputs.append(concise_response)
+        torch.cuda.empty_cache()
+        # with open(f"{full_outputs_dir}/response.json", "w") as f:
+        #     json.dump(response, f)
+        # logger.info(f"Response saved to {full_outputs_dir}/response.json")
 
-    response_token_ids = output_token_ids_batch[0][len(inputs["input_ids"][0]) :]
-
-    full_outputs_dir = os.path.abspath(outputs_dir)
-    if not os.path.exists(full_outputs_dir):
-        logging.info(f"Creating directory: {full_outputs_dir}")
-        os.mkdir(full_outputs_dir)
-
-    response = postprocess_token_sequence(
-        response_token_ids, model, processor, full_outputs_dir, validate=True
-    )
-
-    logger.info(f"Response: {response['text']}")
-    for image in response["images"]:
-        if "save_path" not in image:
-            continue
-        logger.info(f"{image['save_path'] = }")
-        terminal_image = from_file(image["save_path"])
-        terminal_image.draw()
-
-    with open(f"{full_outputs_dir}/response.json", "w") as f:
-        json.dump(response, f)
-    logger.info(f"Response saved to {full_outputs_dir}/response.json")
-
-    return json.dumps(response)
+    with open(output_file, "w") as f:
+        json.dump(concise_outputs, f)
+        
+    with open(f"{output_file}.debug.json", "w") as f:
+        json.dump(outputs, f)
 
 
 def parse_arguments() -> argparse.Namespace:
@@ -170,7 +192,7 @@ def parse_arguments() -> argparse.Namespace:
         "--max_new_tokens",
         type=int,
         required=False,
-        default=2000,
+        default=4096,
         help="The maximum number of tokens to generate.",
     )
     parser.add_argument(
@@ -205,6 +227,20 @@ def parse_arguments() -> argparse.Namespace:
         default=42,
         help="The seed to use for generation.",
     )
+    parser.add_argument(
+        "--input_file",
+        type=str,
+        required=False,
+        default=None,
+        help="The path to the input file.",
+    )
+    parser.add_argument(
+        "--output_file",
+        type=str,
+        required=False,
+        default=None,
+        help="The path to the output file.",
+    )
     args: argparse.Namespace = parser.parse_args()
     return args
 
@@ -221,5 +257,6 @@ if __name__ == "__main__":
         model_cache_dir=args.model_cache_dir,
         outputs_dir=args.outputs_dir,
         seed=args.seed,
-        image_path = args.image_1_path,
+        input_file = args.input_file,
+        output_file = args.output_file,
     )
