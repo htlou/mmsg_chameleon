@@ -11,3 +11,4 @@ batch_generation.py
 *eval.sh
 *1e-4.sh
 *eval#2.sh
+build/
