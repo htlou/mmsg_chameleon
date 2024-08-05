@@ -1,26 +1,10 @@
-# Multimodal Structured Generation
+**This repo is forked from [mmsg](https://github.com/leloykun/mmsg), modified to do batch generation (although not very elegant, it works fine with me)**
 
-Generate interleaved text and image content in a structured format you can directly pass to downstream APIs. You can also use this to control how many "draft" text tokens and "imagination" image tokens the model generates first before it starts generating the final output.
+# Multimodal batch Generation
 
-Example output:
-
-```json
-{
-    "fruit_name": "Orange",
-    "fruit_image": "<image>",
-    "images_of_related_fruits": [
-        "<image>",
-        "<image>",
-        "<image>",
-    ]
-}
+```bash
+bash scripts/interleaved_gen.sh
 ```
-
-With the images saved to disk.
-
-NOTE: This is a work in progress. It currently only supports vector-quantized vision-language models (e.g. Chameleon & its finetunes), but it should work on soft vector vision-language models too with little modification (hopefully).
-
-Preprint coming up.
 
 ## Installation
 
