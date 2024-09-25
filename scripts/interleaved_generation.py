@@ -13,9 +13,9 @@ logging.basicConfig(
 )
 logger = logging.getLogger()
 
-# TODO: currently need to pip install git+https://github.com/leloykun/transformers.git@fc--anole before using this script
+# TODO: currently need to pip install git+https://github.com/htlou/transformers.git@hantao_stable_cham before using this script
 def run_interleaved_generation(
-    model_id: str = "/aifs4su/yaodong/projects/hantao/dev_cham/align-anything/outputs/sft_chameleon_0727_0803_v2",
+    model_id: str = "leloykun/Anole-7b-v0.1-hf",
     inference_mode: Literal["text-to-interleaved-text-image"] = "text-to-interleaved-text-image",
     prompt: Optional[str] = None,
     max_new_tokens: int = 2400,
@@ -32,8 +32,6 @@ def run_interleaved_generation(
         ChameleonProcessor,
         set_seed,
     )
-    # from chameleon.modeling_chameleon import ChameleonForConditionalGeneration
-    # from chameleon.processing_chameleon import ChameleonProcessor
 
     from mmsg.integrations.chameleon_utils import postprocess_token_sequence
 
@@ -130,7 +128,7 @@ def parse_arguments() -> argparse.Namespace:
         "--model_id",
         type=str,
         required=False,
-        default="/aifs4su/yaodong/models/Anole-7b-v0.1-hf",
+        default="leloykun/Anole-7b-v0.1-hf",
         help="The model ID to use for generation. This could be a huggingface repo or a path to a local directory.",
     )
     parser.add_argument(

@@ -137,7 +137,7 @@ def parse_arguments() -> argparse.Namespace:
         "--model_id",
         type=str,
         required=False,
-        default="/aifs4su/yaodong/projects/hantao/dev_cham/align-anything/outputs/dpo_cham_50k+90k+11k",
+        default="leloykun/Anole-7b-v0.1-hf",
         help="The model ID to use for generation. This could be a huggingface repo or a path to a local directory.",
     )
     parser.add_argument(
@@ -208,14 +208,14 @@ def parse_arguments() -> argparse.Namespace:
         "--input_file",
         type=str,
         required=False,
-        default='/aifs4su/yaodong/datasets/aaa_dataset/TI2T-preference/0812_ti2t_preference_dataset/0812_spa-vl_filted_10k_001.json',
+        default='input.json',
         help="The path to the input file.",
     )
     parser.add_argument(
         "--output_file",
         type=str,
         required=False,
-        default='/aifs4su/chenxinyu/2024_8_18_cham_test_output/test_6.json',
+        default='output.json',
         help="The path to the output file.",
     )
     args: argparse.Namespace = parser.parse_args()
